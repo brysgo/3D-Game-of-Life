@@ -43,6 +43,9 @@ Use the '4' key to toggle this special rule and see what the board looks like as
 | 3 | toggle cones     |
 | 4 | toggle teapots*  |
 | y | toggle wireframe |
+| f | toggle fog       |
+| l | toggle lighting  |
+| n | toggle nurb      |
 +---+------------------+
 
 *Teapots represent a cell that is occupied on two intersecting planes. The four key toggles the inter-planar rule effectively turning on/off teapots.

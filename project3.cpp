@@ -44,6 +44,15 @@ int refresh_rate = 60;
 bool explode = false;
 bool crossPlanes = true;
 
+GLuint texture1; //the arrays for our textures
+GLuint texture2;
+GLuint texture3;
+GLuint texture4;
+
+bool lighting = true;
+bool fog = false;
+bool nurb = true;
+
 //Handle movement of the edit circle
 int getNextPosX (int i) {
     if ((i/n) % 2 ) {
@@ -232,6 +241,40 @@ void runGame (int val) {
     glutTimerFunc (refresh_rate,runGame,val+1);
 }
 
+GLuint LoadTexture( const char * filename, int width, int height ) {
+    GLuint texture;
+    unsigned char * data;
+    FILE * file;
+    
+    file = fopen( filename, "rb" );
+    if ( file == NULL ) return 0;
+    data = (unsigned char *)malloc( width * height * 3 );
+    fread( data, width * height * 3, 1, file );
+    fclose( file );
+
+    glGenTextures( 1, &texture ); //generate the texture with the loaded data
+    glBindTexture( GL_TEXTURE_2D, texture ); //bind the texture to it’s array
+    glTexEnvf( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE ); //set texture environment parameters
+
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+
+    //Here we are setting the parameter to repeat the texture instead of clamping the texture
+    //to the edge of our shape. 
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );    
+
+    //Generate the texture
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+    free( data ); //free the texture
+    return texture; //return whether it was successfull
+}
+
+void FreeTexture( GLuint texture )
+{
+  glDeleteTextures( 1, &texture ); 
+}
+
 //draw the cubes that make up the board
 void cube (void) {
     if (explode) {
@@ -247,7 +290,7 @@ void cube (void) {
             glScalef(1+(space-0.5),1+(space-0.5),1+(space-0.5));
         }
     }
-    
+
     for (int i=0;i<ncu;i++)
     {    
     float x, y, z;
@@ -275,17 +318,40 @@ void cube (void) {
     srand(i);
     if (i == edit && edit_mode) {
         //draw the cursor
-        if (board1[i] || board2[i] || board3[i])
+        if (board1[i] || board2[i] || board3[i]) {
             glColor3f(1,0,0);
-        else
+        } else {
             glColor3f(0,1,0);
+        }
+        if (lighting) {
+            glDisable( GL_TEXTURE_2D );
+        }
         if (wireframe)
             glutWireCube(space);
         else
             glutSolidCube(space);
+        if (lighting) {
+            glEnable( GL_TEXTURE_2D );
+        }
     } else {
         glColor3f(.5+rand()/(float)RAND_MAX,.5+rand()/(float)RAND_MAX,.5+rand()/(float)RAND_MAX);
-
+        if (lighting) {
+            GLfloat whiteMaterial[] = {1.0, 1.0, 1.0};
+            if (i % 4 == 3) {
+                glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, whiteMaterial);
+                glBindTexture( GL_TEXTURE_2D, texture1 );
+            } else if (i % 4 == 2) {
+                glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, whiteMaterial);
+                glBindTexture( GL_TEXTURE_2D, texture2 );
+            } else if (i % 4 == 1) {
+                glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, whiteMaterial);
+                glBindTexture( GL_TEXTURE_2D, texture3 );
+            } else {
+                glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, whiteMaterial);
+                glBindTexture( GL_TEXTURE_2D, texture4 );
+            }
+        }
+        
         if (wireframe) {
             if (board1[i] && board2[i] && board3[i]) glutWireCube(space); //draw the cube
             else if ((board1[i] + board2[i] + board3[i]) == 2) glutWireTeapot(space);
@@ -300,18 +366,28 @@ void cube (void) {
             else if (board3[i] && show_board3) glutSolidCone(space/2,space/2,3,3); // draw the cone
         }
         
+        if (lighting) {
+            GLfloat blankMaterial[] = {0.0, 0.0, 0.0};
+            glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, blankMaterial);
+            glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, blankMaterial);
+            glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, blankMaterial);
+            glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, blankMaterial);
+        }
     }
-    
     glPopMatrix();
     }
 }
 
 void init (void) {
-    glEnable (GL_DEPTH_TEST); //enable the depth testing
-    //glEnable (GL_LIGHTING); //enable the lighting
-    //glEnable (GL_LIGHT0); //enable LIGHT0, our Diffuse Light
-    glShadeModel (GL_FLAT); //set the shader to flat shader
-
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    glShadeModel(GL_SMOOTH);
+    if (lighting) {
+        glEnable(GL_LIGHTING);
+    }
+    glEnable(GL_LIGHT0);
+    glEnable(GL_LIGHT1);
+    glEnable(GL_COLOR_MATERIAL);
 }
 
 void camera (void) {
@@ -324,9 +400,6 @@ void display (void) {
     
     glClearColor (0.0,0.0,0.0,1.0); //clear the screen to black
     glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //clear the color buffer and the depth buffer
-    glClear (GL_COLOR_BUFFER_BIT);
-    glEnable(GL_BLEND); //enable the blending
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glMatrixMode( GL_MODELVIEW );
     glColor4f(1.0f,0.0f,0.0f,1.0f);
     
@@ -337,22 +410,87 @@ void display (void) {
     glViewport (0, 0, (GLsizei)screen_width, (GLsizei)screen_height); //set the viewport to the current window specifications
     glScissor(0, 0, (GLsizei)screen_width, (GLsizei)screen_height);
     glLoadIdentity ();
-    glClear(GL_COLOR_BUFFER_BIT);
+    
+    if (lighting) {
+        GLfloat AmbientLight[] = {0.1, 0.1, 0.2};
+        glLightfv (GL_LIGHT0, GL_AMBIENT, AmbientLight);
+        GLfloat DiffuseLight[] = {1, 1, 1};
+        glLightfv (GL_LIGHT1, GL_DIFFUSE, DiffuseLight);
+        GLfloat LightPosition[] = {xpos, ypos, zpos, 1};
+        glLightfv(GL_LIGHT1, GL_POSITION, LightPosition);
+    }
     gluPerspective (60, (GLfloat)screen_width / (GLfloat)screen_height, 1.0, 100.0);
     gluLookAt (0.0, 0.0, 5.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0); //camera position, x,y,z, looking at x,y,z, Up Positions of the camera
     camera();
     glPushMatrix();
+    if (lighting) {
+        texture1 = LoadTexture( "texture.raw", 256, 256 );
+        texture2 = LoadTexture( "/dev/urandom", 256, 256 );
+        texture3 = LoadTexture( "water.raw", 500, 375 );
+        texture4 = LoadTexture( "bubbles.raw", 200, 200 );
+        glEnable( GL_TEXTURE_2D ); //enable 2D texturing
+        glEnable(GL_TEXTURE_GEN_S); //enable texture coordinate generation
+        glEnable(GL_TEXTURE_GEN_T);
+        
+        if (fog) {
+            GLfloat fogColor[4]= {0.5f, 1.0f, 0.5f, 1};  // Fog Color
+            glFogi(GL_FOG_MODE, GL_EXP);        // Fog Mode
+            glFogfv(GL_FOG_COLOR, fogColor);    // Set Fog Color
+            glFogf(GL_FOG_DENSITY, 1.0f);       // How Dense Will The Fog Be
+            glHint(GL_FOG_HINT, GL_DONT_CARE);  // Fog Hint Value
+            glFogf(GL_FOG_START, n*space);      // Fog Start Depth
+            glFogf(GL_FOG_END,-n*space);          // Fog End Depth
+        }
+        
+        if (nurb) {
+            glPushMatrix();
+            glRotatef(270,0.0,1.0,0.0);
+            glTranslated(n*space/2,n*space/2,-n*space);
+            GLfloat ctlpoints[4][4][3];
+            GLUnurbsObj *theNurb;
+            GLfloat knots[8] = {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0};
+            int u, v;
+            for (u = 0; u < 4; u++) {
+               for (v = 0; v < 4; v++) {
+                  ctlpoints[u][v][0] = 2.0*((GLfloat)u - 1.5);
+                  ctlpoints[u][v][1] = 2.0*((GLfloat)v - 1.5);
+
+                  if ( (u == 1 || u == 2) && (v == 1 || v == 2))
+                     ctlpoints[u][v][2] = 3.0;
+                  else
+                     ctlpoints[u][v][2] = -3.0;
+               }
+            }
+
+            theNurb = gluNewNurbsRenderer();
+            gluNurbsProperty(theNurb, GLU_SAMPLING_TOLERANCE, 25.0);
+            gluNurbsProperty(theNurb, GLU_DISPLAY_MODE, GLU_FILL);
+            gluBeginSurface(theNurb);
+            gluNurbsSurface(theNurb, 
+                               8, knots, 8, knots,
+                               4 * 3, 3, &ctlpoints[0][0][0], 
+                               4, 4, GL_MAP2_VERTEX_3);
+            gluEndSurface(theNurb);
+            glPopMatrix();
+        }
+    }
+    cube(); //call the cube drawing function
+    glPopMatrix();
+    if (lighting) {
+        FreeTexture( texture1 );
+        FreeTexture( texture2 );
+        FreeTexture( texture3 );
+        FreeTexture( texture4 );
+    }
+    glPushMatrix();
     glTranslated(space*((n/2)+1),space*(n/2),space*(n/2));
     glutWireCube(space*n);
     glPopMatrix();
-    cube(); //call the cube drawing function
     
     // Draw the secondary view
     glViewport (3*(screen_width/4), 3*(screen_height/4), screen_width/4, screen_width/4); //set the viewport to the current window specifications
     glScissor(3*(screen_width/4), 3*(screen_height/4), screen_width/4, screen_width/4);
     glLoadIdentity();
-    glClear(GL_COLOR_BUFFER_BIT);
-    glLoadIdentity ();
     glOrtho(-1, 13, -1, 13, -1, 13);
     glRotatef(90,0.0,1.0,0.0); 
     cube();
@@ -528,6 +666,30 @@ void keyboard (unsigned char key, int x, int y) {
         else
             glShadeModel (GL_SMOOTH);
     }
+    
+    if (key=='f') {
+        if (fog) {
+            fog = false;
+            glDisable(GL_FOG);  // Disable GL_FOG
+        } else {
+            fog = true;
+            glEnable(GL_FOG);   // Enables GL_FOG
+        }
+    }
+    
+    if (key=='n') {
+        nurb = !nurb;
+    }
+    
+    if (key=='l') {
+        lighting = !lighting;
+        if (lighting) {
+            glEnable(GL_LIGHTING);
+        } else {
+            glDisable(GL_LIGHTING);
+        }
+    }
+    
     if (key=='.') {
         editMovePosZ();
     }
