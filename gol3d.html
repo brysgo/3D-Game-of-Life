@@ -1,0 +1,516 @@
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>three.js canvas - geometry - cube</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+      body {
+        font-family: Monospace;
+        background-color: #f0f0f0;
+        margin: 0px;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+
+    <script src="http://www.html5canvastutorials.com/libraries/Three.js">
+    </script>
+
+    <script>
+    ///
+    /// Game Mechanics
+    ///
+
+    /**
+     * Provides requestAnimationFrame in a cross browser way.
+     * http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+     */
+
+    if ( !window.requestAnimationFrame ) {
+
+      window.requestAnimationFrame = ( function() {
+
+        return window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        window.oRequestAnimationFrame ||
+        window.msRequestAnimationFrame ||
+        function( /* function FrameRequestCallback */ callback, /* DOMElement Element */ element ) {
+
+          window.setTimeout( callback, 1000 / 60 );
+
+        };
+
+      } )();
+
+    }
+    </script>
+
+    <script>
+    n = 15;
+    nsq = n*n;
+    ncu = nsq*n;
+    space = 4;
+    board1 = Array(ncu);
+    board2 = Array(ncu);
+    board3 = Array(ncu);
+    tmp_board1 = Array(ncu);
+    tmp_board2 = Array(ncu);
+    tmp_board3 = Array(ncu);
+
+   randomize = true;
+    var run_once = false;
+    var running = true;
+
+    //Handle movement of the edit circle
+    function getNextPosX (i) {
+        if (((i/n)|0) % 2 ) {
+            var p = (i+1);
+            return ((((p/n)|0)*n)+p%n);
+        } else {
+            var p = (i-1);
+            return ((((p/n)|0)*n)+p%n);
+        }
+    }
+    function editMovePosX () {
+        edit = getNextPosX(edit);
+    }
+    function getNextNegX (i) {
+        if (((i/n)|0) % 2) {
+            var p = (i-1);
+            return ((((p/n)|0)*n)+p%n);
+        } else {
+            var p = (i+1);
+            return ((((p/n)|0)*n)+p%n);
+        }
+    }
+    function editMoveNegX () {
+        edit = getNextNegX(edit);
+    }
+    function getNextNegY (i) {
+        if (((i/nsq)|0) % 2 ) {
+            var p = (i + (2*(n-(i%n))-1));
+            return ((((p/nsq)|0)*nsq)+p%nsq);
+        } else {
+            var p = (i - (2*(i%n)+1));
+            return ((((p/nsq)|0)*nsq)+p%nsq);
+        }
+    }
+    function editMoveNegY () {
+        edit = getNextNegY(edit);
+    }
+    function getNextPosY (i) {
+        if (((i/nsq)|0) % 2 ) {
+            var p = (i - (2*(i%n)+1));
+            return ((((p/nsq)|0)*nsq)+p%nsq);
+        } else {
+            var p = (i + (2*(n-(i%n))-1));
+            return ((((p/nsq)|0)*nsq)+p%nsq);
+        }
+    }
+    function editMovePosY () {
+        edit = getNextPosY(edit);
+    }
+    function getNextPosZ (i) {
+        var p = (i + (2*(nsq-(i%nsq))-1));
+        return (p%ncu);
+    }
+    function editMovePosZ () {
+        edit = getNextPosZ(edit);
+    }
+    function getNextNegZ (i) {
+        var p = (i - (2*(i%nsq)+1));
+        return (p%ncu);
+    }
+    function editMoveNegZ () {
+        edit = getNextNegZ(edit);
+    }
+
+    function runGame () {
+        if (randomize) {
+            for (var i=0; i<ncu; i++) {
+                var b = Math.random();
+                board1[i] = b < 0.1;
+                board2[i] = board1[i];
+                board3[i] = board1[i];
+            }
+            randomize = false;
+        }
+        if (running || run_once) {
+            run_once = false;
+            tmp_board1 = Array(ncu);
+            tmp_board2 = Array(ncu);
+            tmp_board3 = Array(ncu);
+            for (var i=0; i<ncu; ++i) {
+                // Get neighbor sum for each plane
+                var sum1 = 0;
+                var sum2 = 0;
+                var sum3 = 0;
+                // Primaries get shared
+                var backMiddle = getNextNegZ(i);
+                var frontMiddle = getNextPosZ(i);
+                var leftMiddle = getNextNegX(i);
+                var rightMiddle = getNextPosX(i);
+                // Start with Z plane
+                var zplane = [
+                    board1[backMiddle],
+                    board1[frontMiddle],
+                    board1[leftMiddle],
+                    board1[rightMiddle],
+                    board1[getNextNegZ(leftMiddle)],
+                    board1[getNextPosZ(leftMiddle)],
+                    board1[getNextNegZ(rightMiddle)],
+                    board1[getNextPosZ(rightMiddle)]
+                ];
+
+                // Then Y plane
+                var topMiddle = getNextPosY(i);
+                var bottomMiddle = getNextNegY(i);
+                var yplane = [
+                    board2[topMiddle],
+                    board2[bottomMiddle],
+                    board2[leftMiddle],
+                    board2[rightMiddle],
+                    board2[getNextNegY(leftMiddle)],
+                    board2[getNextPosY(leftMiddle)],
+                    board2[getNextNegY(rightMiddle)],
+                    board2[getNextPosY(rightMiddle)]
+                ];
+
+                /* Then X plane
+                var xplane = [
+                    board3[topMiddle],
+                    board3[bottomMiddle],
+                    board3[frontMiddle],
+                    board3[backMiddle],
+                    board3[getNextNegY(frontMiddle)],
+                    board3[getNextPosY(frontMiddle)],
+                    board3[getNextNegY(backMiddle)],
+                    board3[getNextPosY(backMiddle)]
+                ];*/
+
+                for (var j=0; j<8; ++j) sum1 += zplane[j];
+                for (var j=0; j<8; ++j) sum2 += yplane[j];
+                //for (var j=0; j<8; ++j) sum3 += xplane[j];
+
+                var aliveCount = 0;
+
+                if (sum1 == 3 || (sum1 == 2 && board1[i])) {
+                    tmp_board1[i] = true;
+                    aliveCount++;
+                } else {
+                    tmp_board1[i] = false;
+                }
+
+                if (sum2 == 3 || (sum2 == 2 && board2[i])) {
+                    tmp_board2[i] = true;
+                    aliveCount++;
+                } else {
+                    tmp_board2[i] = false;
+                }
+
+                if (sum3 == 3 || (sum3 == 2 && board3[i])) {
+                    tmp_board3[i] = true;
+                    aliveCount++;
+                } else {
+                    tmp_board3[i] = false;
+                }
+
+                if (aliveCount == 2) {
+                    if (tmp_board1[i])
+                        if (tmp_board2[i])
+                            tmp_board3[i] = true;
+                        else
+                            tmp_board2[i] = true;
+                    else
+                        tmp_board1[i] = true;
+                }
+
+            }
+            board1 = tmp_board1;
+            board2 = tmp_board2;
+            board3 = tmp_board3;
+        }
+    }
+
+    ///
+    /// Graphics
+    ///
+
+      var container;
+
+      var camera, scene, renderer, projector, ray;
+      var camDistance = 100;
+
+      var cube, plane;
+
+      var targetRotation = 0;
+      var targetRotationOnMouseDown = 0;
+
+      var mouseX = 0;
+      var mouseXOnMouseDown = 0;
+
+      var windowHalfX = window.innerWidth / 2;
+      var windowHalfY = window.innerHeight / 2;
+
+      init();
+      animate();
+
+      function init() {
+
+        container = document.createElement( 'div' );
+        document.body.appendChild( container );
+
+        var info = document.createElement( 'div' );
+        info.style.position = 'absolute';
+        info.style.top = '10px';
+        info.style.width = '100%';
+        info.style.textAlign = 'center';
+        info.innerHTML = 'Drag to spin the cube';
+        container.appendChild( info );
+
+        camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 1, 1000 );
+        //camera.position.y = 150;
+        camera.position.z = camDistance;
+
+        scene = new THREE.Scene();
+
+        // Cube
+
+        cube = new THREE.Mesh( new THREE.CubeGeometry( n*space, n*space, n*space, 1, 1, 1, { color: 0x000000, shading: THREE.FlatShading, wireframe: true } ), new THREE.MeshBasicMaterial( { color: 0x000000, shading: THREE.FlatShading, wireframe: true } ) );
+        cube.position.x = 0;
+        cube.position.y = 0;
+        cube.position.z = 0;
+        cube.overdraw = true;
+        scene.add( cube );
+
+
+        cubes = [];
+        spheres = [];
+        var x = -(((n*space)/2)+(space/2));
+        var y=(x+space);
+        var z=y;
+
+        for (var i=0; i < ncu; ++i) {
+          if((i%n)==0)
+          {
+              if ((i%nsq)!=0)
+              {
+                if (((i/nsq)|0)%2!=0) {
+                  y -= space;
+                } else {
+                  y += space;
+                }
+              }
+          } else {
+              if ((((i/n)|0)%2)!=0) {
+                  z -= space;
+              } else {
+                  z += space;
+              }
+          }
+          if ((i%nsq)==0) {
+              x += space;
+          }
+
+          var color = (Math.random()*155)|0;
+
+          material = new THREE.MeshBasicMaterial( { color: color, shading: THREE.FlatShading, wireframe: true } );
+
+          cubes[i] = new THREE.Mesh( new THREE.CubeGeometry( space, space, space, 1, 1, 1, material ), material );
+          cubes[i].position.x = x;
+          cubes[i].position.y = y;
+          cubes[i].position.z = z;
+          cubes[i].overdraw = false;
+          cubes[i].boardIndex = i;
+          scene.add( cubes[i] );
+
+          var radius = space/2, segments = 5, rings = 5;
+          spheres[i] = new THREE.Mesh(
+             new THREE.SphereGeometry(radius,
+             segments,
+             rings),
+             material);
+          spheres[i].position.x = x;
+          spheres[i].position.y = y;
+          spheres[i].position.z = z;
+          spheres[i].overdraw = false;
+          scene.add(spheres[i]);
+        }
+
+        // Plane
+
+        plane = new THREE.Mesh( new THREE.PlaneGeometry( n*space, n*space ), new THREE.MeshBasicMaterial( { color: 0xe0e0e0 } ) );
+        plane.rotation.x = - 90 * ( Math.PI / 180 );
+        plane.position.y = - (n*space);
+        plane.overdraw = false;
+        scene.add( plane );
+
+        projector = new THREE.Projector();
+
+        ray = new THREE.Ray( camera.position, null );
+
+
+        renderer = new THREE.CanvasRenderer();
+        renderer.setSize( window.innerWidth, window.innerHeight );
+
+        container.appendChild( renderer.domElement );
+
+
+        document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+        document.addEventListener( 'touchstart', onDocumentTouchStart, false );
+        document.addEventListener( 'touchmove', onDocumentTouchMove, false );
+        document.addEventListener( 'keydown', onDocumentKeyDown, false);
+        document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+
+      }
+
+      //
+
+      function onDocumentKeyDown( event ) {
+
+        if (event.keyCode == 82) {
+          // 'r' = reset
+          randomize = true;
+        } else if (event.keyCode == 80) {
+          // 'p' = play/pause
+          running = !running;
+        } else if (event.keyCode == 79) {
+          // 'p' = play/pause
+          running = false;
+          run_once = true;
+        } else if (event.keyCode == 67) {
+          // 'c' = clear
+          board1 = Array(ncu);
+          board2 = Array(ncu);
+          board3 = Array(ncu);
+        } else if (event.keyCode == 32) {
+          // ' ' = flip
+          var tmp1 = board1.slice(0,nsq*2);
+          var tmp2 = board2.slice(0,nsq*2);
+          var tmp3 = board3.slice(0,nsq*2);
+          board1 = board1.slice(nsq*2).concat(tmp1);
+          board2 = board2.slice(nsq*2).concat(tmp2);
+          board3 = board3.slice(nsq*2).concat(tmp3);
+        }
+      }
+
+      function onDocumentMouseDown( event ) {
+
+        event.preventDefault();
+
+        document.addEventListener( 'mouseup', onDocumentMouseUp, false );
+        document.addEventListener( 'mouseout', onDocumentMouseOut, false );
+
+        mouseXOnMouseDown = event.clientX - windowHalfX;
+        targetRotationOnMouseDown = targetRotation;
+      }
+
+      function onDocumentMouseMove( event ) {
+
+        event.preventDefault();
+
+        if ( mouseXOnMouseDown != -1 ) {
+
+          mouseX = event.clientX - windowHalfX;
+
+          targetRotation = targetRotationOnMouseDown + ( mouseX - mouseXOnMouseDown ) * 0.02;
+
+        }
+
+        mouse3D = projector.unprojectVector( new THREE.Vector3( ( event.clientX / renderer.domElement.width ) * 2 - 1, - ( event.clientY / renderer.domElement.height ) * 2 + 1, 0.5 ), camera );
+        ray.direction = mouse3D.subSelf( camera.position ).normalize();
+
+      }
+
+      function onDocumentMouseUp( event ) {
+        var intersect, intersects = ray.intersectScene( scene );
+
+                if ( intersects.length > 0 ) {
+
+                  intersect = intersects[ 0 ];
+
+                  if ( intersect ) {
+                    var i = intersect.object.boardIndex;
+                    if (i < nsq) {
+                      board1[i] = !board1[i]
+                      board2[i] = !board2[i]
+                      board3[i] = !board3[i]
+                    }
+                  }
+                }
+
+        mouseXOnMouseDown = -1;
+        document.removeEventListener( 'mouseup', onDocumentMouseUp, false );
+        document.removeEventListener( 'mouseout', onDocumentMouseOut, false );
+      }
+
+      function onDocumentMouseOut( event ) {
+
+        mouseXOnMouseDown = -1;
+        document.removeEventListener( 'mouseup', onDocumentMouseUp, false );
+        document.removeEventListener( 'mouseout', onDocumentMouseOut, false );
+      }
+
+      function onDocumentTouchStart( event ) {
+
+        if ( event.touches.length == 1 ) {
+
+          event.preventDefault();
+
+          mouseXOnMouseDown = event.touches[ 0 ].pageX - windowHalfX;
+          targetRotationOnMouseDown = targetRotation;
+
+        }
+      }
+
+      function onDocumentTouchMove( event ) {
+
+        if ( event.touches.length == 1 ) {
+
+          event.preventDefault();
+
+          mouseX = event.touches[ 0 ].pageX - windowHalfX;
+          targetRotation = targetRotationOnMouseDown + ( mouseX - mouseXOnMouseDown ) * 0.05;
+
+        }
+      }
+
+      //
+
+      function animate() {
+
+        requestAnimationFrame( animate );
+        render();
+
+      }
+
+      function render() {
+
+        //plane.rotation.z = cube.rotation.y += ( targetRotation - cube.rotation.y ) * 0.05;
+        camera.rotation.y -= ( targetRotation + camera.rotation.y ) * 0.05;
+        camera.position.x = camDistance*Math.sin( camera.rotation.y );
+        camera.position.z = camDistance*Math.cos( camera.rotation.y );
+        runGame();
+
+        for (var i = 0; i < ncu; ++i) {
+          cubes[i].visible = false;
+          spheres[i].visible = false;
+
+          if (board1[i] && board2[i] && board3[i]) {
+            cubes[i].visible = true;
+          } else if (board1[i] || board2[i] || board3[i]) {
+            spheres[i].visible = true;
+          }
+        }
+
+
+        renderer.render( scene, camera );
+      }
+
+    </script>
+
+  </body>
+</html>
